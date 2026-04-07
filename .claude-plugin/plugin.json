@@ -1,0 +1,14 @@
+{
+  "name": "agent-workflow",
+  "version": "1.1.0",
+  "description": "Workflow pipeline: cleanup → clarify → execute → verify + autoresearch + ralph-loop",
+  "hooks": {
+    "Stop": [{
+      "matcher": "",
+      "hooks": [{
+        "type": "command",
+        "command": "python3 \"$PLUGIN_DIR/hooks/ralph-stop.py\""
+      }]
+    }]
+  }
+}

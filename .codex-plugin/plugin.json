@@ -1,0 +1,19 @@
+{
+  "name": "agent-workflow",
+  "version": "1.1.0",
+  "description": "Workflow pipeline: cleanup → clarify → execute → verify + autoresearch + ralph-loop",
+  "skills": "./skills-codex/",
+  "hooks": {
+    "Stop": [{
+      "hooks": [{
+        "type": "command",
+        "command": "python3 \"$PLUGIN_DIR/hooks/ralph-stop.py\""
+      }]
+    }]
+  },
+  "interface": {
+    "displayName": "Workflow Skills",
+    "shortDescription": "cleanup → clarify → execute → verify pipeline",
+    "category": "Development"
+  }
+}

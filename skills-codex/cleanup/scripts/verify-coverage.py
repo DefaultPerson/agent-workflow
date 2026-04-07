@@ -114,9 +114,9 @@ def main():
         sys.exit(0)
     else:
         # Write candidates to temp file for agent verification (don't add to gaps directly)
-        candidates_path = sys.argv[3].replace('.gaps.md', '.uncovered.tmp')
-        if candidates_path == sys.argv[3]:
-            candidates_path = sys.argv[1] + '.uncovered.tmp'
+        import os
+        base = os.path.splitext(sys.argv[1])[0]
+        candidates_path = base + '.uncovered.tmp'
         with open(candidates_path, 'w') as f:
             for line in uncovered:
                 f.write(f"{line}\n")
