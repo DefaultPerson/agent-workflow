@@ -3,7 +3,8 @@ name: autoresearch
 description: >
   Autonomous keep-or-revert experiment loop. Iteratively optimizes any metric
   through single atomic changes, committing before verification and discarding
-  failures. Works with ralph-loop for guaranteed non-stop execution.
+  failures. Two execution modes: ralph (same-session, quick iterations) and
+  scheduled (cron trigger, fresh session per iteration — for multi-hour iterations).
   Triggers: "autoresearch", "/autoresearch", "auto research", "optimize metric",
   "автоисследование", "оптимизируй метрику"
 allowed-tools: [Bash, Glob, Grep, Read, Edit, Write]
@@ -17,6 +18,7 @@ Autonomous keep-or-revert experiment loop. One atomic change per iteration — c
 
 ```
 /autoresearch <goal in natural language>
+/autoresearch --continue    # used by scheduled trigger, skips setup
 ```
 
 $ARGUMENTS
@@ -27,7 +29,7 @@ Arguments: `<goal>` — what you want to optimize, in natural language.
 
 ## Phase 0: SETUP
 
-**If `autoresearch-scratchpad.md` already exists in the project root — skip to Phase 1.**
+**If `autoresearch-scratchpad.md` already exists in the project root OR `$ARGUMENTS` contains `--continue` — skip to Phase 1.**
 
 ### 0.1 Parse goal
 
@@ -42,6 +44,10 @@ Ask all questions in ONE AskUserQuestion call:
 3. **Guard command** (optional) — what command checks nothing is broken? (e.g. `pytest`, `npm test`, `cargo check`). Leave empty to skip
 4. **Direction** — is higher better or lower better? (e.g. "higher" for accuracy, "lower" for latency)
 5. **Max iterations** — how many iterations max? (default: 20)
+6. **Execution mode**:
+   - **`ralph`** (default) — same session, ralph-loop re-injects after each iteration. Best for quick iterations (<30 min each). Fails if session context fills before `max_iterations`.
+   - **`scheduled`** — cron-triggered, fresh session per iteration. Best for long iterations (>1h each — ML training, long benchmarks, integration suites). Each iteration gets a full context window.
+7. **Iteration estimate hours** (only if `mode = scheduled`) — how long does ONE iteration typically take? Used to compute cron schedule (trigger fires every `estimate + 30min buffer`).
 
 ### 0.3 Dry-run validation
 
@@ -86,6 +92,9 @@ best_metric: <baseline number>
 best_commit: "<current HEAD hash>"
 iteration: 0
 max_iterations: <N>
+mode: "<ralph or scheduled>"
+iteration_estimate_hours: <number or empty if ralph>
+trigger_id: "<set later for scheduled mode>"
 ---
 
 ## What worked
@@ -104,9 +113,13 @@ iteration	commit	metric	delta	status	description
 0	<HEAD hash>	<baseline>	-	BASELINE	initial measurement
 ```
 
-### 0.7 Activate ralph-loop
+### 0.7 Activate execution mode
 
-Create the ralph-loop state file to enable automatic loop enforcement:
+Branch on `mode` from Phase 0.2:
+
+#### Mode A: ralph (default)
+
+Create ralph-loop state file to enable automatic loop enforcement:
 
 ```bash
 mkdir -p .claude
@@ -123,7 +136,45 @@ Continue autoresearch. Read autoresearch-scratchpad.md for full context and curr
 RALPH_EOF
 ```
 
+Proceed to Phase 1.
+
+#### Mode B: scheduled
+
+Compute cron schedule from `iteration_estimate_hours`:
+- `1h` → every 90 minutes: `*/90 * * * *` (fallback: `30 */2 * * *`)
+- `2h` → every 2.5h: `30 */2 * * *`  (approximation — cron doesn't do half-hours cleanly, round up)
+- `3h` → every 3.5h: `0 */4 * * *`
+- `Nh` → every `ceil(N + 0.5)` hours: `0 */X * * *` where `X = ceil(N + 0.5)`
+
+Invoke the `schedule` skill to create a recurring trigger:
+
+```
+Use the schedule skill to create a new trigger:
+- name: "autoresearch-<goal-slug>"
+- cron: "<computed cron expression>"
+- prompt: "/autoresearch --continue"
+- working_directory: "<current project root>"
+- description: "Autoresearch iteration for: <goal>"
+```
+
+After the trigger is created, record its ID in the scratchpad frontmatter (`trigger_id: <id>`) so later phases can delete it.
+
+Print to user:
+```
+Scheduled mode activated.
+- Trigger: autoresearch-<goal-slug>
+- Schedule: <cron expression> (every <X>h)
+- Estimated iterations until max: <N> × <estimate>h = <total>h
+- Each iteration runs in a fresh session
+
+To stop early: /schedule delete autoresearch-<goal-slug>
+```
+
+**Do NOT proceed to Phase 1 in scheduled mode during initial setup.** Exit cleanly — the trigger will wake up on schedule and invoke `/autoresearch --continue` to run the first iteration.
+
 ### 0.8 Proceed to Phase 1
+
+Only in `mode: ralph`. Scheduled mode exits after 0.7.
 
 ---
 
@@ -259,7 +310,7 @@ Update body sections:
 
 ## Phase 8: EXIT CHECK
 
-Read `iteration` and `max_iterations` from scratchpad frontmatter.
+Read `iteration`, `max_iterations`, `mode`, `trigger_id` from scratchpad frontmatter.
 
 ```
 IF iteration >= max_iterations:
@@ -267,14 +318,23 @@ IF iteration >= max_iterations:
       - Best metric achieved: X (started at Y, improvement: Z%)
       - Iterations: N total, K kept, M discarded
       - Best commit: <hash>
-    
+
+    IF mode == "scheduled":
+      Invoke schedule skill to delete trigger <trigger_id>.
+      Print: "Scheduled trigger deleted."
+
     Output: <promise>AUTORESEARCH COMPLETE</promise>
 
 ELSE:
     Print: "Iteration <N>: <STATUS>. Metric: <value> (best: <best>, delta: <delta>)"
-    
-    Immediately continue to Phase 1 for next iteration.
-    (If you try to stop, ralph-loop will catch the exit and re-inject the prompt.)
+
+    IF mode == "ralph":
+      Immediately continue to Phase 1 for next iteration.
+      (If you try to stop, ralph-loop will catch the exit and re-inject the prompt.)
+
+    IF mode == "scheduled":
+      Exit cleanly. The cron trigger will wake up next cycle and invoke
+      /autoresearch --continue for the next iteration. Do NOT loop in this session.
 ```
 
 ---
@@ -287,7 +347,8 @@ When done (after `<promise>` or manual cancel):
 - `autoresearch-scratchpad.md` and `autoresearch-history.tsv` are on the branch as experiment record
 - User can `git switch main && git merge autoresearch/<goal>` to apply results
 - Or cherry-pick specific commits
-- Delete ralph-loop state: `rm .claude/ralph-loop.local.md` (if not auto-cleaned)
+- **Mode: ralph** — delete ralph-loop state: `rm .claude/ralph-loop.local.md` (if not auto-cleaned)
+- **Mode: scheduled** — delete cron trigger via `schedule` skill using `trigger_id` from scratchpad (if not auto-cleaned in Phase 8)
 
 ---
 
