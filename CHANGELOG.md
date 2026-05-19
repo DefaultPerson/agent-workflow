@@ -1,5 +1,32 @@
 # Changelog
 
+## 2.4.0
+
+`/clarify` learns to write in the project's vocabulary, surfaces hard-to-reverse decisions as ADR offers, and exposes an optional seam to publish to an issue tracker. Both Claude and Codex variants updated in lockstep.
+
+### Added
+
+- **`## Writing style for the enriched spec` section** in both `skills/clarify/SKILL.md` and `skills-codex/clarify/SKILL.md`. Five rules borrowed from mattpocock/skills `grill-with-docs`: sharpen fuzzy language, be opinionated about terminology, keep FR definitions tight (one sentence in MUST/SHOULD/MAY tense), stress-test edge cases with concrete scenarios (input → expected output), cross-reference with code. Each rule has a ❌/✅ pair next to it. Applied in step 2 (questioner) and steps 3-5 (decomposition / contracts / edge cases).
+- **Phase 5 ADR candidate detection** — scans the in-memory enriched spec for decisions passing all three criteria (hard to reverse + surprising without context + real trade-off). Surfaces up to 3 highest-reverse-cost candidates via AskUserQuestion / numbered TUI prompt. User options: `Create ADR-NNNN`, `Already documented (specify)`, `Skip`. Creates `docs/adr/NNNN-slug.md` with sequential numbering when approved. Cap of 3 per run prevents fatigue.
+- **Phase 1 ADR sweep** — reads existing `docs/adr/*.md` if present to extract slugs and titles. Phase 5 flags conflicts between the in-memory spec and established ADRs regardless of the 3-criteria filter.
+- **Phase 10 downstream offer** — after the backup disposition choice, if `~/.claude/skills/to-prd/SKILL.md` (or `~/.codex/skills/to-prd/SKILL.md` for the Codex variant) exists, a second AskUserQuestion / TUI prompt asks whether to publish via `/to-prd`. Never auto-invokes; just prints `Type /to-prd next` for explicit user intent.
+- **`skills/clarify/references/adr-format.md`** — minimal ADR template (1-3 sentences, optional Status/Considered Options/Consequences), the 3 criteria for offering, four-digit sequential numbering scheme, and qualifying examples. Attribution to mattpocock/skills `grill-with-docs/ADR-FORMAT.md` (MIT) on the first line.
+
+### Changed
+
+- **`## Connections to other skills`** in both variants rewritten to show upstream (`mattpocock:grill-with-docs` for project-wide vocabulary / ADRs — orthogonal), downstream (`/to-prd` to tracker, `mattpocock:tdd` / `codex exec` / manual for build), and the explicit boundary (clarify does NOT touch `CONTEXT.md`; ADR offers are scoped to the spec being clarified, not project-wide).
+- **README flow diagram** — added `/to-prd → issue tracker` as a downstream branch from the enriched spec; clarify box now shows `+ADRs` to reflect Phase 5 output. Example section gained step 4 demonstrating the optional `/to-prd` invocation.
+- **Self-check** in both SKILL.md files gained an ADR bullet: confirmation that the step 5 ADR candidate detection ran and that existing ADRs were respected or conflicts flagged.
+
+### Why
+
+Two recurring quality holes in /clarify output:
+
+1. **Fuzzy terminology.** Enriched specs picked up the input's vague words ("user", "account", "system") and propagated them. The next reader had to guess which actor or entity was meant. The mattpocock `grill-with-docs` writing rules were already battle-tested for exactly this — pulling them into a single section gives /clarify the same discipline without re-inventing the wheel.
+2. **Architectural decisions buried in tasks.** Hard-to-reverse choices (DB schema, public API contract, infra/auth/messaging, security boundary) ended up inline in task descriptions. The user couldn't easily find or audit them later. The ADR seam gives those decisions a permanent, project-scoped artifact with attribution to the spec that triggered the decision.
+
+The `/to-prd` downstream offer removes the manual step of copying the enriched spec into Linear / GitHub Issues by hand — but stays opt-in to keep tracker writes under explicit user intent.
+
 ## 2.3.0
 
 Codex CLI support — `agent-skills` now ships dual SKILL.md variants (Claude + Codex) with shared `roles/`, `scripts/`, `references/` via install-time symlinks. Same skills, two hosts, no dual maintenance for the shared core.

@@ -5,12 +5,13 @@ Three focused skills for the pre-implementation half of an AI coding workflow: l
 ## The Flow
 
 ```
- ┌────────┐  cleanup  ┌──────────┐  clarify  ┌─────────┐  extract  ┌────────────┐    →   mattpocock:tdd
- │ notes  ├──────────>│  clean   ├──────────>│ atomic  ├──────────>│  tasks +   │    →   Claude Code goal feature
- │  with  │           │ markdown │           │ tasks + │           │  offline   │    →   manual implementation
- │ links  │           │ document │           │ AC with │           │   link     │    →   claude -p for AC verify
- └────────┘           └──────────┘           │  proof  │           │  content   │
+ ┌────────┐  cleanup  ┌──────────┐  clarify  ┌─────────┐  extract  ┌────────────┐    →   /to-prd → issue tracker
+ │ notes  ├──────────>│  clean   ├──────────>│ atomic  ├──────────>│  tasks +   │    →   TDD (red/green/refactor)
+ │  with  │           │ markdown │           │ tasks + │           │  offline   │    →   Claude Code goal feature
+ │ links  │           │ document │           │ AC with │           │   link     │    →   manual implementation
+ └────────┘           └──────────┘           │  proof  │           │  content   │    →   claude -p for AC verify
                                              │commands │           └────────────┘
+                                             │+ADRs    │
                                              └─────────┘
                                                   ▲
                                                   │
@@ -18,11 +19,13 @@ Three focused skills for the pre-implementation half of an AI coding workflow: l
                                         (Phase 7.6 in clarify)
 ```
 
+The `/to-prd` seam (if installed separately) wraps the enriched spec as a PRD and publishes to the configured issue tracker — opt-in, never auto-invoked.
+
 ## Skills
 
 - **`/cleanup`** — losslessly reorganize a messy notes/plan/chat dump into a clean sectioned markdown file. Three-level gap detection (deterministic URL check + per-section semantic agents + fuzzy coverage net) proves nothing was lost. Multi-file input → multi-file output (per-source pipelines, not merged).
 - **`/extract`** — pull content out of every URL in a notes file (YouTube subtitles via yt-dlp, public Telegram via embed-page scrape, HTML via pandoc/curl). Replaces each URL with a local pointer, preserves originals, gitignores extracted content.
-- **`/clarify`** — turn a clean spec into an implementation-ready document: atomic tasks with Given/When/Then acceptance criteria, shell-runnable proof commands, contracts (FR-NNN with MUST/SHOULD/MAY), edge cases, risks. Cross-model consensus loop with Codex (optional) catches issues single-model self-review misses.
+- **`/clarify`** — turn a clean spec into an implementation-ready document: atomic tasks with Given/When/Then acceptance criteria, shell-runnable proof commands, contracts (FR-NNN with MUST/SHOULD/MAY), edge cases, risks. Reads existing `docs/adr/*.md` and offers to write new ADRs for hard-to-reverse decisions surfaced during decomposition (cap 3 per run, all 3 criteria must hold). Cross-model consensus loop with Codex (optional) catches issues single-model self-review misses.
 
 Each skill follows the same template — `description` states triggers and tradeoffs (not algorithm), honest weakness section up front, ❌/✅ contrast pairs, "letter = spirit" canon, Cialdini-framed rules, senior-review self-check before output.
 
@@ -41,7 +44,12 @@ Each skill follows the same template — `description` states triggers and trade
 # 3. Decompose into atomic tasks with verifiable AC. Phase 7.6 invokes
 #    `codex review --uncommitted` (codex CLI, if installed) against the
 #    uncommitted spec edit and iterates up to 3 rounds until consensus.
+#    Phase 5 offers ADR creation for hard-to-reverse decisions.
 /clarify research-notes.md
+
+# 4. (Optional) If `/to-prd` is installed, publish the enriched spec to
+#    your issue tracker (e.g. Linear, GitHub Issues) wrapped as a PRD.
+/to-prd
 ```
 
 ## Installation
